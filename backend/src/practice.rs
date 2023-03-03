@@ -1,6 +1,7 @@
 // use aws::config::meta::
 
 #![allow(dead_code)]
+#![allow(unused_imports)]
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::{
@@ -8,7 +9,6 @@ use aws_sdk_dynamodb::{
         AttributeDefinition, AttributeValue, KeySchemaElement, ProvisionedThroughput,
         ScalarAttributeType,
     },
-    output::list_tables_output,
     Client, Error,
 };
 use rusty_ulid::{generate_ulid_string, Ulid};
@@ -24,6 +24,7 @@ async fn main() -> Result<(), Error> {
     println!("ulid: {}", ulid);
 
     let ulid2 = Ulid::generate();
+    // std::error::Error
 
     println!("ulid2: {:?}", ulid2);
 

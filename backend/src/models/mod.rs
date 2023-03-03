@@ -2,7 +2,10 @@
 
 use rusty_ulid::generate_ulid_string;
 
-struct User {}
+#[derive(Debug)]
+struct User {
+    id: String,
+}
 
 struct Member {}
 
