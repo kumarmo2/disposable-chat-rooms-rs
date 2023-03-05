@@ -1,9 +1,7 @@
-use std::{future::Future, pin::Pin};
-
 use super::User;
 use async_trait::async_trait;
-use axum::{extract::FromRequestParts, http::HeaderValue};
-use rusty_ulid::Ulid;
+use axum::extract::FromRequestParts;
+use axum_extra::extract::CookieJar;
 
 pub(crate) struct UserExtractor(pub(crate) User);
 
@@ -22,6 +20,8 @@ impl<S> FromRequestParts<S> for UserExtractor {
         parts: &mut axum::http::request::Parts,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
+        // TODO: use cookies instead of headers.
+        // CookieJar::from_request_parts(parts, state)
         let user_header = match parts.headers.get("user") {
             // TODO: create item in the dynamodb as well.
             None => return Ok(Self::create_user_in_dynamo()),
@@ -35,7 +35,6 @@ impl<S> FromRequestParts<S> for UserExtractor {
                 User::new(rusty_ulid::generate_ulid_string())
             }
         };
-
         Ok(Self(user))
     }
 }
