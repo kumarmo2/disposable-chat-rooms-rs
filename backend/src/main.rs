@@ -1,3 +1,5 @@
+#![feature(async_fn_in_trait)]
+#![feature(allocator_api)]
 mod models;
 
 use axum::http::{Request, StatusCode};
@@ -6,21 +8,29 @@ use axum::middleware::Next;
 use axum::Json;
 use axum::{routing::get, Router};
 use axum_extra::extract::cookie::{Cookie, CookieJar};
+use hyper::server::conn::Http;
+use models::extractors::UserExtractor;
 use rusty_ulid::{generate_ulid_string, Ulid};
-use serde_json::json;
+use serde_json::{json, Value};
 
 #[tokio::main]
 async fn main() {
     println!("sdfsdfl");
     let router = Router::new()
-        .route("/", get(|| async { "hello world" }))
-        .route("/cookie", get(route_with_cookie))
-        .layer(from_fn(user_cookie_middleware));
+        .route("/", get(home_handler))
+        .route("/cookie", get(route_with_cookie));
+    // .layer(from_fn(user_cookie_middleware));
 
     axum::Server::bind(&"127.0.0.1:3001".parse().unwrap())
         .serve(router.into_make_service())
         .await
         .unwrap()
+}
+
+#[axum_macros::debug_handler]
+async fn home_handler(UserExtractor(user): UserExtractor) -> Json<Value> {
+    println!("home handler, user: {:?}", user);
+    Json(json!({ "result": "Hello, world"}))
 }
 
 async fn user_cookie_middleware<B>(

@@ -1,10 +1,26 @@
 #![allow(dead_code)]
 
+pub(crate) mod extractors;
+
+use std::str::FromStr;
+
 use rusty_ulid::generate_ulid_string;
 
 #[derive(Debug)]
-struct User {
+pub(crate) struct User {
     id: String,
+}
+
+impl User {
+    pub(crate) fn new(id: String) -> Self {
+        Self { id }
+    }
+
+    pub(crate) fn from_str(id: &str) -> Self {
+        Self {
+            id: String::from_str(id).unwrap(),
+        }
+    }
 }
 
 struct Member {}
