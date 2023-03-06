@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use rusty_ulid::generate_ulid_string;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct User {
     id: String,
 }

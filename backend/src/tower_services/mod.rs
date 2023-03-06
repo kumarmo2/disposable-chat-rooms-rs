@@ -4,6 +4,7 @@ use std::pin::Pin;
 use std::{future::Future, time::Duration};
 
 use crate::models::User;
+use crate::AppState;
 use axum::body::Body;
 use axum::http::request::Request;
 use axum::response::IntoResponse;
@@ -17,7 +18,7 @@ pub(crate) struct UserService<T> {
 }
 
 #[derive(Clone)]
-pub(crate) struct UserLayer;
+pub(crate) struct UserLayer(pub(crate) AppState);
 
 impl<T> Layer<T> for UserLayer
 where
@@ -32,14 +33,13 @@ where
     }
 }
 
-impl<T, B> Service<Request<B>> for UserService<T>
+impl<T> Service<Request<Body>> for UserService<T>
 where
-    T: Service<Request<B>>,
-    <T as Service<Request<B>>>::Future: Send + 'static,
-    <T as Service<Request<B>>>::Response: IntoResponse,
+    T: Service<Request<Body>> + Send,
+    <T as Service<Request<Body>>>::Future: Send + 'static,
+    <T as Service<Request<Body>>>::Response: IntoResponse,
 {
     type Response = (Option<CookieJar>, T::Response);
-    // type Response = ;
 
     type Error = T::Error;
 
@@ -53,35 +53,37 @@ where
         return self.inner_service.poll_ready(cx);
     }
 
-    fn call(&mut self, mut req: Request<B>) -> Self::Future {
+    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+        // TODO:
+        // 1. if user cookie is already present, then just create User from the existing cookie instead of generatin new one.
+        // 2. persis the user into dynamodb.
         println!("inside call");
-        let mut jar = CookieJar::from_headers(req.headers());
-        if let Some(user_cookie) = jar.get("user") {
-            println!("found cookie, inserting the user extension");
-            let user = User::from_str(user_cookie.value());
+
+        let jar = CookieJar::from_headers(req.headers());
+        if let Some(id) = jar.get("user").and_then(|x| Some(x.value())) {
+            println!("found user cookie, id: {}", id);
+            let user = User::from_str(id);
             req.extensions_mut().insert(user);
-            let future = self.inner_service.call(req);
-            let fut = async {
-                if let Ok(res) = future.await {
-                    let result: Result<Self::Response, Self::Error> = Ok((None, res));
-                    return result;
-                    // return Box::pin(result);
-                }
-                todo!();
-            };
+            let fut = self.inner_service.call(req);
+            let fut = async move { fut.await.and_then(|res| Ok((None, res))) };
             return Box::pin(fut);
-
-            // return Box::pin(future);
         }
-        todo!();
-        let user_id = rusty_ulid::generate_ulid_string();
-        std::thread::sleep(Duration::from_secs(2));
 
-        println!("didn't find cookie, inserting into extension");
-        req.extensions_mut()
-            .insert(User::from_str(user_id.as_str()));
-
-        // let fut = self.inner_service.call(req);
-        // Box::pin(fut)
+        println!("didn't find cookie");
+        let id = rusty_ulid::generate_ulid_string();
+        let user = User::new(id.clone());
+        req.extensions_mut().insert(user);
+        let mut jar = CookieJar::from_headers(req.headers());
+        let future = self.inner_service.call(req);
+        let fut = async move {
+            match future.await {
+                Err(e) => Err(e),
+                Ok(r) => {
+                    jar = jar.add(Cookie::new("user", id.clone()));
+                    Ok((Some(jar), r))
+                }
+            }
+        };
+        Box::pin(fut)
     }
 }
