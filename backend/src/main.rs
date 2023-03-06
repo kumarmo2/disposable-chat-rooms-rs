@@ -1,10 +1,12 @@
 #![feature(async_fn_in_trait)]
 #![feature(allocator_api)]
 #![warn(dead_code)]
+mod dao;
 mod models;
 mod tower_services;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;

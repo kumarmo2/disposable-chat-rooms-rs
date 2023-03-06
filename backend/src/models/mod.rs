@@ -8,7 +8,7 @@ use rusty_ulid::generate_ulid_string;
 
 #[derive(Debug, Clone)]
 pub(crate) struct User {
-    id: String,
+    pub(crate) id: String,
 }
 
 impl User {
@@ -20,6 +20,13 @@ impl User {
         Self {
             id: String::from_str(id).unwrap(),
         }
+    }
+
+    pub(crate) fn get_partition_key(&self) -> String {
+        format!("user|{}", self.id)
+    }
+    pub(crate) fn get_sort_key(&self) -> String {
+        format!("user|{}", self.id)
     }
 }
 

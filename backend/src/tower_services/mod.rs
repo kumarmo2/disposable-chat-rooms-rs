@@ -1,20 +1,25 @@
 #![warn(dead_code)]
 
 use std::pin::Pin;
+use std::task::Poll;
 use std::{future::Future, time::Duration};
 
+use crate::dao::put_user;
 use crate::models::User;
 use crate::AppState;
+use aws_sdk_dynamodb::Client;
 use axum::body::Body;
 use axum::http::request::Request;
 use axum::response::IntoResponse;
 use axum_extra::extract::cookie::Cookie;
 use axum_extra::extract::CookieJar;
+use hyper::StatusCode;
 use tower::{Layer, Service};
 
 #[derive(Clone)]
 pub(crate) struct UserService<T> {
     inner_service: T,
+    dynamodb: AppState,
 }
 
 #[derive(Clone)]
@@ -29,8 +34,14 @@ where
     fn layer(&self, inner: T) -> Self::Service {
         return UserService {
             inner_service: inner,
+            dynamodb: self.0.clone(),
         };
     }
+}
+
+pub(crate) enum Error<E> {
+    ServiceError(E),
+    DynamoDbPutItemError(StatusCode),
 }
 
 impl<T> Service<Request<Body>> for UserService<T>
@@ -41,7 +52,8 @@ where
 {
     type Response = (Option<CookieJar>, T::Response);
 
-    type Error = T::Error;
+    // type Error = T::Error;
+    type Error = Error<T::Error>;
 
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -50,7 +62,13 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), Self::Error>> {
         println!("inside poll_ready");
-        return self.inner_service.poll_ready(cx);
+        let result = match self.inner_service.poll_ready(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(res) => res
+                .and_then(|_| Ok(()))
+                .or_else(|err| Err(Error::ServiceError(err))),
+        };
+        Poll::Ready(result)
     }
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
@@ -65,25 +83,45 @@ where
             let user = User::from_str(id);
             req.extensions_mut().insert(user);
             let fut = self.inner_service.call(req);
-            let fut = async move { fut.await.and_then(|res| Ok((None, res))) };
+            let fut = async move {
+                fut.await
+                    .and_then(|res| Ok((None, res)))
+                    .or_else(|err| Err(Error::ServiceError(err)))
+            };
             return Box::pin(fut);
         }
 
         println!("didn't find cookie");
         let id = rusty_ulid::generate_ulid_string();
         let user = User::new(id.clone());
-        req.extensions_mut().insert(user);
-        let mut jar = CookieJar::from_headers(req.headers());
-        let future = self.inner_service.call(req);
+
         let fut = async move {
-            match future.await {
-                Err(e) => Err(e),
-                Ok(r) => {
-                    jar = jar.add(Cookie::new("user", id.clone()));
-                    Ok((Some(jar), r))
+            match put_user(&self.dynamodb.lock().await.dynamodb, &user).await {
+                Err(e) => {
+                    return Err(Error::<T::Error>::DynamoDbPutItemError(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                    ))
                 }
-            }
+                _ => (),
+            };
+            let mut jar = CookieJar::from_headers(req.headers());
+
+            req.extensions_mut().insert(user);
+            let x: Result<
+                (Option<CookieJar>, <T as Service<Request<Body>>>::Response),
+                Error<<T as Service<Request<Body>>>::Error>,
+            > = self
+                .inner_service
+                .call(req)
+                .await
+                .and_then(|res| {
+                    let jar = jar.add(Cookie::new("user", id));
+                    Ok((Some(jar), res))
+                })
+                .or_else(|e| Err(Error::ServiceError(e)));
+            return x;
         };
+
         Box::pin(fut)
     }
 }
