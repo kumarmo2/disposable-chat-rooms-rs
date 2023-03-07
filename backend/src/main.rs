@@ -45,7 +45,7 @@ async fn main() {
 
     let app_state = Arc::new(Mutex::new(State { dynamodb: client }));
 
-    let router = Router::new()
+    let apis = Router::new()
         .route("/", get(home_handler))
         .route("/cookie", get(route_with_cookie))
         .layer(
@@ -53,6 +53,8 @@ async fn main() {
                 .layer(HandleErrorLayer::new(handle_service_error))
                 .layer(UserLayer(app_state.clone())),
         );
+
+    let router = Router::new().nest("/api", apis);
 
     axum::Server::bind(&"127.0.0.1:3001".parse().unwrap())
         .serve(router.into_make_service())

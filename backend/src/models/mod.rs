@@ -25,8 +25,8 @@ impl DynamoItem for User {
         format!("user|{}", self.id)
     }
 
-    fn sk(&self) -> String {
-        format!("user|{}", self.id)
+    fn sk(&self) -> Option<String> {
+        Some(format!("user|{}", self.id))
     }
 }
 
