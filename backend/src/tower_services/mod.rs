@@ -1,5 +1,6 @@
 #![warn(dead_code)]
 
+use std::convert::Infallible;
 use std::pin::Pin;
 use std::task::Poll;
 use std::{future::Future, time::Duration};
@@ -44,17 +45,26 @@ pub(crate) enum Error<E> {
     DynamoDbPutItemError(StatusCode),
 }
 
+impl<E> IntoResponse for Error<E>
+where
+    E: IntoResponse,
+{
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            Error::ServiceError(err) => err.into_response(),
+            Error::DynamoDbPutItemError(code) => code.into_response(),
+        }
+    }
+}
+
 impl<T> Service<Request<Body>> for UserService<T>
 where
-    T: Service<Request<Body>> + Send,
+    T: Service<Request<Body>> + Send + Clone,
     <T as Service<Request<Body>>>::Future: Send + 'static,
     <T as Service<Request<Body>>>::Response: IntoResponse,
 {
     type Response = (Option<CookieJar>, T::Response);
-
-    // type Error = T::Error;
     type Error = Error<T::Error>;
-
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn poll_ready(
@@ -72,12 +82,11 @@ where
     }
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-        // TODO:
         // 1. if user cookie is already present, then just create User from the existing cookie instead of generatin new one.
         // 2. persis the user into dynamodb.
         println!("inside call");
 
-        let jar = CookieJar::from_headers(req.headers());
+        let mut jar = CookieJar::from_headers(req.headers());
         if let Some(id) = jar.get("user").and_then(|x| Some(x.value())) {
             println!("found user cookie, id: {}", id);
             let user = User::from_str(id);
@@ -94,28 +103,25 @@ where
         println!("didn't find cookie");
         let id = rusty_ulid::generate_ulid_string();
         let user = User::new(id.clone());
+        req.extensions_mut().insert(user.clone());
+        let fut = self.inner_service.call(req);
 
+        let cloned_self = self.clone();
         let fut = async move {
-            match put_user(&self.dynamodb.lock().await.dynamodb, &user).await {
-                Err(e) => {
+            match put_user(&cloned_self.dynamodb.lock().await.dynamodb, &user).await {
+                Err(_) => {
+                    println!("put item dynamodb request failed");
                     return Err(Error::<T::Error>::DynamoDbPutItemError(
                         StatusCode::INTERNAL_SERVER_ERROR,
-                    ))
+                    ));
                 }
                 _ => (),
             };
-            let mut jar = CookieJar::from_headers(req.headers());
 
-            req.extensions_mut().insert(user);
-            let x: Result<
-                (Option<CookieJar>, <T as Service<Request<Body>>>::Response),
-                Error<<T as Service<Request<Body>>>::Error>,
-            > = self
-                .inner_service
-                .call(req)
+            let x = fut
                 .await
                 .and_then(|res| {
-                    let jar = jar.add(Cookie::new("user", id));
+                    jar = jar.add(Cookie::new("user", id));
                     Ok((Some(jar), res))
                 })
                 .or_else(|e| Err(Error::ServiceError(e)));

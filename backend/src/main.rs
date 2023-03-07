@@ -5,6 +5,8 @@ mod dao;
 mod models;
 mod tower_services;
 
+use axum::error_handling::HandleErrorLayer;
+use axum::response::{IntoResponse, Response};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -46,12 +48,23 @@ async fn main() {
     let router = Router::new()
         .route("/", get(home_handler))
         .route("/cookie", get(route_with_cookie))
-        .layer(ServiceBuilder::new().layer(UserLayer(app_state.clone())));
+        .layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(handle_service_error))
+                .layer(UserLayer(app_state.clone())),
+        );
 
     axum::Server::bind(&"127.0.0.1:3001".parse().unwrap())
         .serve(router.into_make_service())
         .await
         .unwrap()
+}
+
+async fn handle_service_error<E>(err: crate::tower_services::Error<E>) -> Response
+where
+    E: IntoResponse,
+{
+    err.into_response()
 }
 
 #[axum_macros::debug_handler]
