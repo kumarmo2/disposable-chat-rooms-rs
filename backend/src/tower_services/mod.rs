@@ -1,14 +1,12 @@
 #![warn(dead_code)]
 
-use std::convert::Infallible;
+use std::future::Future;
 use std::pin::Pin;
 use std::task::Poll;
-use std::{future::Future, time::Duration};
 
-use crate::dao::put_user;
+use crate::dao::put_item;
 use crate::models::User;
 use crate::AppState;
-use aws_sdk_dynamodb::Client;
 use axum::body::Body;
 use axum::http::request::Request;
 use axum::response::IntoResponse;
@@ -71,7 +69,6 @@ where
         &mut self,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), Self::Error>> {
-        println!("inside poll_ready");
         let result = match self.inner_service.poll_ready(cx) {
             Poll::Pending => return Poll::Pending,
             Poll::Ready(res) => res
@@ -82,10 +79,6 @@ where
     }
 
     fn call(&mut self, mut req: Request<Body>) -> Self::Future {
-        // 1. if user cookie is already present, then just create User from the existing cookie instead of generatin new one.
-        // 2. persis the user into dynamodb.
-        println!("inside call");
-
         let mut jar = CookieJar::from_headers(req.headers());
         if let Some(id) = jar.get("user").and_then(|x| Some(x.value())) {
             println!("found user cookie, id: {}", id);
@@ -100,7 +93,6 @@ where
             return Box::pin(fut);
         }
 
-        println!("didn't find cookie");
         let id = rusty_ulid::generate_ulid_string();
         let user = User::new(id.clone());
         req.extensions_mut().insert(user.clone());
@@ -108,7 +100,7 @@ where
 
         let cloned_self = self.clone();
         let fut = async move {
-            match put_user(&cloned_self.dynamodb.lock().await.dynamodb, &user).await {
+            match put_item(&cloned_self.dynamodb.lock().await.dynamodb, &user).await {
                 Err(_) => {
                     println!("put item dynamodb request failed");
                     return Err(Error::<T::Error>::DynamoDbPutItemError(

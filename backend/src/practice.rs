@@ -15,6 +15,7 @@ use rusty_ulid::{generate_ulid_string, Ulid};
 use serde_json::{json, Value};
 use std::time::{Instant, SystemTime};
 
+mod dao;
 mod models;
 use models::Room;
 

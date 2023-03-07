@@ -4,11 +4,30 @@ pub(crate) mod extractors;
 
 use std::str::FromStr;
 
+use aws_sdk_dynamodb::model::AttributeValue;
 use rusty_ulid::generate_ulid_string;
+
+use crate::dao::{BoxedAttributes, DynamoItem};
+
+// use crate::dao::DynamoItem;
 
 #[derive(Debug, Clone)]
 pub(crate) struct User {
     pub(crate) id: String,
+}
+
+impl DynamoItem for User {
+    fn attributes(&self) -> BoxedAttributes {
+        Box::new(vec![("id", AttributeValue::S(self.id.to_string()))].into_iter())
+    }
+
+    fn pk(&self) -> String {
+        format!("user|{}", self.id)
+    }
+
+    fn sk(&self) -> String {
+        format!("user|{}", self.id)
+    }
 }
 
 impl User {

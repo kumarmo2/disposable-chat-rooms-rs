@@ -1,7 +1,7 @@
 #![feature(async_fn_in_trait)]
 #![feature(allocator_api)]
 #![warn(dead_code)]
-mod dao;
+pub(crate) mod dao;
 mod models;
 mod tower_services;
 
