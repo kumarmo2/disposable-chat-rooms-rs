@@ -18,7 +18,7 @@ use tower::{Layer, Service};
 #[derive(Clone)]
 pub(crate) struct UserService<T> {
     inner_service: T,
-    dynamodb: AppState,
+    app_state: AppState,
 }
 
 #[derive(Clone)]
@@ -33,7 +33,7 @@ where
     fn layer(&self, inner: T) -> Self::Service {
         return UserService {
             inner_service: inner,
-            dynamodb: self.0.clone(),
+            app_state: self.0.clone(),
         };
     }
 }
@@ -100,7 +100,7 @@ where
 
         let cloned_self = self.clone();
         let fut = async move {
-            match put_item(&cloned_self.dynamodb.lock().await.dynamodb, &user).await {
+            match put_item(&cloned_self.app_state.dynamodb, &user).await {
                 Err(_) => {
                     println!("put item dynamodb request failed");
                     return Err(Error::<T::Error>::DynamoDbPutItemError(

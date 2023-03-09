@@ -9,7 +9,6 @@ use axum::error_handling::HandleErrorLayer;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;
@@ -29,8 +28,7 @@ pub(crate) struct State {
     pub(crate) dynamodb: Client,
 }
 
-// TODO: check if Mutex can be removed.
-type AppState = Arc<Mutex<State>>;
+type AppState = Arc<State>;
 
 #[tokio::main]
 async fn main() {
@@ -45,7 +43,7 @@ async fn main() {
         Client::new(&config)
     };
 
-    let app_state = Arc::new(Mutex::new(State { dynamodb: client }));
+    let app_state = Arc::new(State { dynamodb: client });
 
     let apis = Router::new()
         .route("/", get(home_handler))

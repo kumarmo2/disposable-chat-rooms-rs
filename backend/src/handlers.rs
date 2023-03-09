@@ -15,8 +15,7 @@ pub(crate) async fn create_room(
     State(app_state): State<AppState>,
     Json(req): Json<CreateRoomRequest>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let guard = app_state.lock().await;
-    let room_option = dao::get_room_by_id(&guard.dynamodb, req.id.as_ref()).await;
+    let room_option = dao::get_room_by_id(&app_state.dynamodb, req.id.as_ref()).await;
 
     if let Some(_) = room_option {
         return Err((
@@ -26,7 +25,7 @@ pub(crate) async fn create_room(
     }
 
     let new_room = Room::from_fields::<String>(req.id, req.display_name, user.id);
-    dao::put_item(&guard.dynamodb, &new_room)
+    dao::put_item(&app_state.dynamodb, &new_room)
         .await
         .and_then(|_| Ok(Json(json!({ "result" : &new_room.id}))))
         .or_else(|err| {
