@@ -437,6 +437,7 @@ dependencies = [
  "hyper",
  "rusty_ulid",
  "serde",
+ "serde_dynamo",
  "serde_json",
  "tokio",
  "tower",
@@ -1236,6 +1237,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "serde_dynamo"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e97a115dbb19597161164fb4eaab420dfaab7b5214d95790aaefafff441dedc3"
+dependencies = [
+ "aws-sdk-dynamodb",
+ "base64",
+ "serde",
 ]
 
 [[package]]

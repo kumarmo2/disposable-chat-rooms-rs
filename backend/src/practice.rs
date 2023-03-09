@@ -16,6 +16,7 @@ use serde_json::{json, Value};
 use std::time::{Instant, SystemTime};
 
 mod dao;
+mod dtos;
 mod models;
 use models::Room;
 

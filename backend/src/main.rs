@@ -1,12 +1,13 @@
-#![feature(async_fn_in_trait)]
-#![feature(allocator_api)]
 #![warn(dead_code)]
 pub(crate) mod dao;
+mod dtos;
+mod handlers;
 mod models;
 mod tower_services;
 
 use axum::error_handling::HandleErrorLayer;
 use axum::response::{IntoResponse, Response};
+use axum::routing::post;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -28,6 +29,7 @@ pub(crate) struct State {
     pub(crate) dynamodb: Client,
 }
 
+// TODO: check if Mutex can be removed.
 type AppState = Arc<Mutex<State>>;
 
 #[tokio::main]
@@ -48,6 +50,8 @@ async fn main() {
     let apis = Router::new()
         .route("/", get(home_handler))
         .route("/cookie", get(route_with_cookie))
+        .route("/room", post(handlers::create_room))
+        .with_state(app_state.clone())
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_service_error))

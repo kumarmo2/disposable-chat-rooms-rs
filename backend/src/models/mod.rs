@@ -2,10 +2,10 @@
 
 pub(crate) mod extractors;
 
-use std::str::FromStr;
+use std::{fmt::format, str::FromStr, time::Instant};
 
 use aws_sdk_dynamodb::model::AttributeValue;
-use rusty_ulid::generate_ulid_string;
+use serde::Deserialize;
 
 use crate::dao::{BoxedAttributes, DynamoItem};
 
@@ -51,26 +51,35 @@ impl User {
 
 struct Member {}
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub(crate) struct Room {
-    id: String,
-    name: String,
+    pub(crate) id: String,
+    display_name: String,
+    created_by: String,
+    // created_on: String,
 }
 
 impl Room {
-    pub(crate) fn new(name: &str) -> Self {
+    pub(crate) fn from_fields<T>(
+        id: String,
+        name: String,
+        created_by: String,
+        // created_on: Instant,
+    ) -> Self
+    where
+        T: Into<String>,
+    {
         Self {
-            id: generate_ulid_string(),
-            name: name.to_owned(),
+            id,
+            display_name: name,
+            created_by,
+            // TODO: handle for created_on
+            // created_on: created_on.to_r,
         }
     }
 
-    pub(crate) fn from_fields(id: String, name: String) -> Self {
-        Self { id, name }
-    }
-
     pub(crate) fn get_partition_key(&self) -> String {
-        format!("room|{}", self.id)
+        Self::get_partition_key_from_id(&self.id)
     }
 
     pub(crate) fn get_sort_key(&self) -> String {
@@ -78,10 +87,38 @@ impl Room {
     }
 
     pub(crate) fn name(&self) -> &str {
-        self.name.as_str()
+        self.display_name.as_str()
     }
 
     pub(crate) fn id(&self) -> &str {
         self.id.as_str()
+    }
+
+    pub(crate) fn get_partition_key_from_id(id: &str) -> String {
+        format!("room|{}", id)
+    }
+}
+
+impl DynamoItem for Room {
+    fn attributes(&self) -> BoxedAttributes {
+        Box::new(
+            vec![
+                ("id", AttributeValue::S(self.id.to_string())),
+                (
+                    "display_name",
+                    AttributeValue::S(self.display_name.to_string()),
+                ),
+                ("created_by", AttributeValue::S(self.created_by.to_string())),
+            ]
+            .into_iter(),
+        )
+    }
+
+    fn pk(&self) -> String {
+        self.get_partition_key()
+    }
+
+    fn sk(&self) -> Option<String> {
+        Some(self.get_sort_key())
     }
 }
