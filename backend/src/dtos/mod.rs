@@ -7,6 +7,11 @@ pub(crate) struct CreateRoomRequest {
     pub(crate) member_name: String,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct JoinRoomRequest {
+    pub(crate) display_name: String,
+}
+
 #[derive(Serialize)]
 pub(crate) enum ApiResult<T, E>
 where

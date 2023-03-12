@@ -8,6 +8,7 @@ mod tower_services;
 use axum::error_handling::HandleErrorLayer;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
+use handlers::join_room;
 use std::sync::Arc;
 
 use aws_config::meta::region::RegionProviderChain;
@@ -47,6 +48,7 @@ async fn main() {
 
     let room_routes = Router::new()
         .route("/", post(handlers::create_room))
+        .route("/:room_id/join", post(join_room))
         .route("/:room_id/members", get(handlers::get_members_in_room));
 
     let room_routes = Router::new().nest("/rooms", room_routes);

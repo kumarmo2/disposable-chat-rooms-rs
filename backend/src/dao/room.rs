@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use aws_sdk_dynamodb::{
     error::QueryError, model::AttributeValue, output::query_output, types::SdkError, Client,
 };

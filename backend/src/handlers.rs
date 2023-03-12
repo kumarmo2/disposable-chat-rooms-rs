@@ -8,10 +8,70 @@ use hyper::StatusCode;
 
 use crate::{
     dao::{self, room::get_room_by_id},
-    dtos::{ApiResult, CreateRoomRequest},
+    dtos::{ApiResult, CreateRoomRequest, JoinRoomRequest},
     models::{member::Member, Room, User},
     AppState,
 };
+
+pub(crate) async fn join_room(
+    Path(room_id): Path<String>,
+    Extension(user): Extension<User>,
+    State(app_state): State<AppState>,
+    Json(request): Json<JoinRoomRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ApiResult<&'static str, &'static str>>)> {
+    /*
+     * - check if room exists, if no, return error.
+     * - check if user is already a member of the room, if yes, return error.
+     * - create member entry.
+     *
+     * */
+
+    let room_details_future = get_room_by_id(&app_state.dynamodb, &room_id);
+
+    let member_partition_key = Member::get_partition_key_from_room_id(&room_id);
+
+    let member_sort_key = Member::get_sort_key_from_user_id(&user.id);
+
+    let member_details_fut = dao::get_item_by_primary_key::<Member>(
+        &app_state.dynamodb,
+        &member_partition_key,
+        Some(&member_sort_key),
+    );
+
+    let (room_details, member_details): (Option<_>, Result<_, _>) =
+        futures::join!(room_details_future, member_details_fut);
+
+    let Some(_) = room_details else {
+        return Err((StatusCode::OK, Json(ApiResult::Error("room doesn't exist"))));
+    };
+
+    let Ok(result) = member_details else {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ApiResult::Error("Something went wrong. Please try!"))));
+    };
+
+    let None = result else {
+        return Err((StatusCode::OK, Json(ApiResult::Error("User is already a member"))));
+    };
+
+    let member_item = Member::from_fields(request.display_name, room_id, user.id);
+
+    dao::put_item(&app_state.dynamodb, &member_item)
+        .await
+        .and_then(|_| Ok(StatusCode::OK))
+        .or_else(|e| {
+            println!("error while inserting member: {:?}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResult::Error(
+                    "Something went wrong. Please try again!sdfsdf",
+                )),
+            ))
+        })
+
+    // insert the member.
+
+    // todo!()
+}
 
 #[axum_macros::debug_handler]
 pub(crate) async fn get_members_in_room(

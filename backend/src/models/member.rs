@@ -24,6 +24,13 @@ impl Member {
     pub(crate) fn get_partition_key_from_room_id(id: &str) -> String {
         format!("room|{}", id)
     }
+
+    pub(crate) fn get_sort_key_from_user_id<T>(id: &T) -> String
+    where
+        T: AsRef<str>,
+    {
+        format!("user|{}", id.as_ref())
+    }
 }
 
 impl DynamoItem for Member {
@@ -43,6 +50,6 @@ impl DynamoItem for Member {
     }
 
     fn sk(&self) -> Option<String> {
-        Some(format!("user|{}", self.user_id))
+        Some(Self::get_sort_key_from_user_id(&self.user_id))
     }
 }
