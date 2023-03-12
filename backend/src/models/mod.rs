@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub(crate) mod extractors;
+pub(crate) mod member;
 
 use std::{fmt::format, str::FromStr, time::Instant};
 

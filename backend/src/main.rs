@@ -45,18 +45,26 @@ async fn main() {
 
     let app_state = Arc::new(State { dynamodb: client });
 
+    let room_routes = Router::new()
+        .route("/", post(handlers::create_room))
+        .route("/:room_id/members", get(handlers::get_members_in_room));
+
+    let room_routes = Router::new().nest("/rooms", room_routes);
+
     let apis = Router::new()
         .route("/", get(home_handler))
-        .route("/cookie", get(route_with_cookie))
-        .route("/room", post(handlers::create_room))
+        .route("/cookie", get(route_with_cookie));
+
+    let apis = Router::new().merge(room_routes).merge(apis);
+
+    let router = Router::new()
+        .nest("/api", apis)
         .with_state(app_state.clone())
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(handle_service_error))
                 .layer(UserLayer(app_state.clone())),
         );
-
-    let router = Router::new().nest("/api", apis);
 
     axum::Server::bind(&"127.0.0.1:3001".parse().unwrap())
         .serve(router.into_make_service())

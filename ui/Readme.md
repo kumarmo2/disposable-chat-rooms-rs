@@ -11,11 +11,14 @@
   - uuid
   - PartitionKey: User|<uuid>
 - Members
-  - uuid
   - displayname
   - roomId
+  - user_id
   - PartitionKey: Room|<uuid> 
   - SortKey: User|<uuid>
+  - Access patterns
+    - room members
+    - 
 - Messages
   - Id: Duration since epoch time in nano-seconds.
   - sentByMemberId
@@ -33,7 +36,7 @@
   - Get All messages
   - Get All messages after a certain message. This would be used for pagination.
 - Is this user U1 a member of the room R1 ? 
-- What all rooms a user U1 is member of ? (Not done)
+- What all rooms a user U1 is member of ? (Not done) (Global Index(userId, roomId) on members?)
 - Get All Rooms(will need admin access)
 
 

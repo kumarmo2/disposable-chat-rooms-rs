@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+pub(crate) mod room;
 
 use aws_sdk_dynamodb::{
     error::PutItemError, model::AttributeValue, output, types::SdkError, Client,
@@ -37,33 +38,4 @@ where
     println!("putting item");
     let x = put_item_request.send().await;
     x.and_then(|_| Ok(()))
-}
-
-pub(crate) async fn get_room_by_id(client: &Client, id: &str) -> Option<Room> {
-    let query_output = client
-        .query()
-        .table_name(MAIN_TABLE_NAME)
-        .key_condition_expression("pk = :id")
-        .expression_attribute_values(
-            ":id",
-            AttributeValue::S(Room::get_partition_key_from_id(id)),
-        )
-        .send()
-        .await
-        .ok();
-
-    let Some(output) = query_output else {
-        return None;
-    };
-
-    let Some(items) = output.items() else {
-        return None;
-    };
-
-    let Some(room) = items.first() else {
-        return None;
-    };
-    let room = room.clone();
-
-    from_item(room).ok()
 }
