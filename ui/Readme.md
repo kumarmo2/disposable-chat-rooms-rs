@@ -21,6 +21,7 @@
     - 
 - Messages
   - Id: Duration since epoch time in nano-seconds.
+  - room_id
   - sentByMemberId
   - sentByMemberName
   - sentOn
