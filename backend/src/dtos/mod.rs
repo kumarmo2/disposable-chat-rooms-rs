@@ -1,3 +1,7 @@
+use aws_sdk_dynamodb::{
+    error::{PutItemError, QueryError},
+    types::SdkError,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -20,4 +24,10 @@ where
 {
     Result(T),
     Error(E),
+}
+
+pub(crate) enum DaoError {
+    Internal(String),
+    PutError(SdkError<PutItemError>),
+    QueryError(SdkError<QueryError>),
 }

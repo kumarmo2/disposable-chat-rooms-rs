@@ -10,6 +10,8 @@ use aws_sdk_dynamodb::{
 use serde::Deserialize;
 use serde_dynamo::from_item;
 
+use crate::dtos::DaoError;
+
 const MAIN_TABLE_NAME: &'static str = "main";
 
 pub(crate) type BoxedAttributes = Box<dyn Iterator<Item = (&'static str, AttributeValue)>>;
@@ -25,7 +27,7 @@ pub(crate) async fn get_item_by_primary_key<'a, T>(
     client: &Client,
     partition_key: &str,
     sort_key: Option<&str>,
-) -> Result<Option<T>, SdkError<QueryError>>
+) -> Result<Option<T>, DaoError>
 where
     T: Deserialize<'a>,
 {
@@ -48,7 +50,7 @@ where
 
     if let Err(e) = query_output {
         println!("error while putting item, err: {:?}", e);
-        return Err(e);
+        return Err(DaoError::QueryError(e));
     };
     let output = query_output.unwrap();
 
@@ -63,8 +65,9 @@ where
 
     from_item(item.clone())
         .or_else(|e| {
-            println!("error while deserializing item, e: {:?}", e);
-            Ok(None)
+            let error = format!("error while deserializing item, e: {:?}", e);
+            println!("{}", error);
+            Err(DaoError::Internal(error))
         })
         .and_then(|item| Ok(item))
 }
