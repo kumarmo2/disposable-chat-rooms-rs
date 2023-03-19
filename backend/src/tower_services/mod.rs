@@ -4,9 +4,8 @@ use std::future::Future;
 use std::pin::Pin;
 use std::task::Poll;
 
-use crate::dao::put_item;
 use crate::models::User;
-use crate::AppState;
+use crate::{dao::put_item, dtos::AppState};
 use axum::body::Body;
 use axum::http::request::Request;
 use axum::response::IntoResponse;

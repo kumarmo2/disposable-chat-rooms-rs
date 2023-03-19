@@ -2,6 +2,7 @@
 
 pub(crate) mod extractors;
 pub(crate) mod member;
+pub(crate) mod message;
 
 use std::{fmt::format, str::FromStr, time::Instant};
 

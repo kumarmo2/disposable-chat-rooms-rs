@@ -17,6 +17,7 @@ use std::time::{Instant, SystemTime};
 
 mod dao;
 mod dtos;
+pub(crate) mod handlers;
 mod models;
 use models::Room;
 

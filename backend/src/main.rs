@@ -8,7 +8,7 @@ mod tower_services;
 use axum::error_handling::HandleErrorLayer;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
-use handlers::join_room;
+use dtos::State;
 use std::sync::Arc;
 
 use aws_config::meta::region::RegionProviderChain;
@@ -18,18 +18,12 @@ use axum::http::StatusCode;
 use axum::{routing::get, Router};
 use axum::{Extension, Json};
 use axum_extra::extract::CookieJar;
+use handlers::{create_room, get_members_in_room, join_room};
 use models::User;
 use serde_json::{json, Value};
 use tower::ServiceBuilder;
 
 use crate::tower_services::UserLayer;
-
-#[derive(Clone)]
-pub(crate) struct State {
-    pub(crate) dynamodb: Client,
-}
-
-type AppState = Arc<State>;
 
 #[tokio::main]
 async fn main() {
@@ -47,17 +41,24 @@ async fn main() {
     let app_state = Arc::new(State { dynamodb: client });
 
     let room_routes = Router::new()
-        .route("/", post(handlers::create_room))
+        .route("/", post(create_room))
         .route("/:room_id/join", post(join_room))
-        .route("/:room_id/members", get(handlers::get_members_in_room));
+        .route("/:room_id/members", get(get_members_in_room));
 
     let room_routes = Router::new().nest("/rooms", room_routes);
+
+    let message_routes = Router::new().route("/", post(handlers::message::create_message));
+
+    let message_routes = Router::new().nest("/messages", message_routes);
 
     let apis = Router::new()
         .route("/", get(home_handler))
         .route("/cookie", get(route_with_cookie));
 
-    let apis = Router::new().merge(room_routes).merge(apis);
+    let apis = Router::new()
+        .merge(room_routes)
+        .merge(apis)
+        .merge(message_routes);
 
     let router = Router::new()
         .nest("/api", apis)

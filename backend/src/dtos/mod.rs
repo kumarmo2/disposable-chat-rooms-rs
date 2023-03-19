@@ -1,6 +1,11 @@
+pub(crate) mod message;
+
+use std::sync::Arc;
+
 use aws_sdk_dynamodb::{
     error::{PutItemError, QueryError},
     types::SdkError,
+    Client,
 };
 use serde::{Deserialize, Serialize};
 
@@ -26,8 +31,16 @@ where
     Error(E),
 }
 
+#[derive(Debug)]
 pub(crate) enum DaoError {
     Internal(String),
     PutError(SdkError<PutItemError>),
     QueryError(SdkError<QueryError>),
 }
+
+#[derive(Clone)]
+pub(crate) struct State {
+    pub(crate) dynamodb: Client,
+}
+
+pub(crate) type AppState = Arc<State>;

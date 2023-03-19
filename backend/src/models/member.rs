@@ -7,7 +7,7 @@ use crate::dao::DynamoItem;
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Member {
-    display_name: String,
+    pub(crate) display_name: String,
     room_id: String,
     user_id: String,
 }
