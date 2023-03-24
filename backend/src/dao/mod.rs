@@ -1,4 +1,5 @@
 use std::{collections::HashMap, str::FromStr};
+pub(crate) mod message;
 pub(crate) mod room;
 
 use aws_sdk_dynamodb::{
@@ -88,7 +89,10 @@ where
         put_item_request = put_item_request.item("sk", AttributeValue::S(sk));
     }
 
-    println!("putting item");
+    println!("putting item, {:?}", put_item_request);
     let x = put_item_request.send().await;
-    x.and_then(|_| Ok(()))
+    x.and_then(|_| Ok(())).or_else(|x| {
+        println!("error, x: {:?}", x);
+        Err(x)
+    })
 }

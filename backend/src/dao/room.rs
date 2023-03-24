@@ -11,7 +11,7 @@ pub(crate) async fn get_room_by_id(client: &Client, id: &str) -> Option<Room> {
     let query_output = client
         .query()
         .table_name(MAIN_TABLE_NAME)
-        .key_condition_expression("pk = :id")
+        .key_condition_expression("pk = :id and sk = :id")
         .expression_attribute_values(
             ":id",
             AttributeValue::S(Room::get_partition_key_from_id(id)),

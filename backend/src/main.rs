@@ -18,7 +18,7 @@ use axum::http::StatusCode;
 use axum::{routing::get, Router};
 use axum::{Extension, Json};
 use axum_extra::extract::CookieJar;
-use handlers::{create_room, get_members_in_room, join_room};
+use handlers::{create_room, get_members_in_room, get_messages, join_room};
 use models::User;
 use serde_json::{json, Value};
 use tower::ServiceBuilder;
@@ -43,6 +43,7 @@ async fn main() {
     let room_routes = Router::new()
         .route("/", post(create_room))
         .route("/:room_id/join", post(join_room))
+        .route("/:room_id/messages", get(get_messages))
         .route("/:room_id/members", get(get_members_in_room));
 
     let room_routes = Router::new().nest("/rooms", room_routes);

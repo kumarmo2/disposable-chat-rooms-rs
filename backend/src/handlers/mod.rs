@@ -9,9 +9,51 @@ use hyper::StatusCode;
 
 use crate::{
     dao::{self, room::get_room_by_id},
-    dtos::{ApiResult, AppState, CreateRoomRequest, JoinRoomRequest},
+    dtos::{
+        message::{GetMessagesResponse, MessageDto},
+        ApiResult, AppState, CreateRoomRequest, JoinRoomRequest,
+    },
     models::{member::Member, Room, User},
 };
+
+pub(crate) async fn get_messages(
+    Path(room_id): Path<String>,
+    State(app_state): State<AppState>,
+    Extension(_): Extension<User>,
+) -> Result<
+    Json<ApiResult<GetMessagesResponse, &'static str>>,
+    (StatusCode, Json<ApiResult<&'static str, &'static str>>),
+> {
+    // TODO: add pagination for messages.
+
+    println!("room_id: {}", room_id);
+    let room_details_by_id_fut = dao::room::get_room_by_id(&app_state.dynamodb, &room_id);
+
+    let messages_fut = dao::message::get_messages(&room_id, &app_state.dynamodb);
+
+    let (room_details, messages) = tokio::join!(room_details_by_id_fut, messages_fut);
+
+    if let None = room_details {
+        return Err((
+            StatusCode::OK,
+            Json(ApiResult::Error("room doesn't exists")),
+        ));
+    }
+
+    if let Err(e) = messages {
+        println!("Err while getting messages, error: {:?}", e);
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResult::Error("Something went wrong. Please try again!")),
+        ));
+    }
+    let messages = messages.unwrap();
+    println!("messages.length: {}", messages.len());
+    let response = GetMessagesResponse {
+        messages: messages.into_iter().map(|m| MessageDto::from(m)).collect(),
+    };
+    Ok(Json(ApiResult::Result(response)))
+}
 
 pub(crate) async fn join_room(
     Path(room_id): Path<String>,

@@ -10,10 +10,10 @@ use super::Room;
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Messsage {
     pub(crate) id: String,
-    room_id: String,
-    content: String,
-    sent_by_user_id: String,
-    sent_by_member_name: String,
+    pub(crate) room_id: String,
+    pub(crate) content: String,
+    pub(crate) sent_by_user_id: String,
+    pub(crate) sent_by_member_name: String,
 }
 
 impl Messsage {
@@ -35,6 +35,10 @@ impl Messsage {
 
     pub(crate) fn get_sort_key_from_id(message_id: &str) -> String {
         format!("message|{}", message_id)
+    }
+
+    pub(crate) fn get_partition_key_from_room_id(id: &str) -> String {
+        Room::get_partition_key_from_id(id)
     }
 }
 
@@ -59,7 +63,7 @@ impl DynamoItem for Messsage {
     }
 
     fn pk(&self) -> String {
-        Room::get_partition_key_from_id(&self.room_id)
+        Self::get_partition_key_from_room_id(&self.room_id)
     }
 
     fn sk(&self) -> Option<String> {

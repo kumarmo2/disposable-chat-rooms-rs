@@ -40,4 +40,13 @@
 - What all rooms a user U1 is member of ? (Not done) (Global Index(userId, roomId) on members?)
 - Get All Rooms(will need admin access)
 
+### Dynamodb notes
+- for reverse sorting, use `ScanIndexForward` = false.
+
+
+### Example dynamodb queries
+```
+aws dynamodb query --table-name main --key-condition-expression "pk = :pk" --expression-attribute-values  '{":pk":{"S":"room|01GW8ZSKZC9EJJJ6BS5R8NMP1E"}}' --endpoint-url http://localhost:8000
+
+```
 
