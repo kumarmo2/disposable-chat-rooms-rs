@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, ops::Deref, str::FromStr};
 pub(crate) mod message;
 pub(crate) mod room;
 
@@ -24,13 +24,16 @@ pub(crate) trait DynamoItem {
     fn sk(&self) -> Option<String>;
 }
 
-pub(crate) async fn get_item_by_primary_key<'a, T>(
+// TODO: instead of taking &str, check if Deref<Target = &str> or AsRef<str> could be used.
+pub(crate) async fn get_item_by_primary_key<'a, T, S1, S2>(
     client: &Client,
-    partition_key: &str,
-    sort_key: Option<&str>,
+    partition_key: S1,
+    sort_key: Option<S2>,
 ) -> Result<Option<T>, DaoError>
 where
     T: Deserialize<'a>,
+    S1: AsRef<str>,
+    S2: AsRef<str>,
 {
     let mut key_condition_expression = String::from_str("pk = :pk").unwrap();
     if let Some(_) = sort_key.as_ref() {
@@ -41,10 +44,10 @@ where
         .query()
         .table_name(MAIN_TABLE_NAME)
         .key_condition_expression(key_condition_expression)
-        .expression_attribute_values(":pk", AttributeValue::S(partition_key.to_string()));
+        .expression_attribute_values(":pk", AttributeValue::S(partition_key.as_ref().to_string()));
 
     if let Some(sk) = sort_key {
-        query = query.expression_attribute_values(":sk", AttributeValue::S(sk.to_string()))
+        query = query.expression_attribute_values(":sk", AttributeValue::S(sk.as_ref().to_string()))
     }
 
     let query_output = query.send().await;

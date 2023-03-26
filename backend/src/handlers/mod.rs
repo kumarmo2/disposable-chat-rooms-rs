@@ -74,7 +74,7 @@ pub(crate) async fn join_room(
 
     let member_sort_key = Member::get_sort_key_from_user_id(&user.id);
 
-    let member_details_fut = dao::get_item_by_primary_key::<Member>(
+    let member_details_fut = dao::get_item_by_primary_key::<Member, &String, &String>(
         &app_state.dynamodb,
         &member_partition_key,
         Some(&member_sort_key),
@@ -118,7 +118,6 @@ pub(crate) async fn join_room(
 #[axum_macros::debug_handler]
 pub(crate) async fn get_members_in_room(
     Path(room_id): Path<String>,
-    // Extension(logged_in_user): Extension<User>,
     State(app_state): State<AppState>,
 ) -> Result<
     Json<ApiResult<Vec<Member>, &'static str>>,

@@ -58,7 +58,7 @@ where
         self.inner_service.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
+    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
         /*
          * - check if "user" cookie exits
          * - if no, return unauthorized.
@@ -79,9 +79,10 @@ where
         };
         let mut cloned_self = self.clone();
         let user_id = user_cookie.value().to_string();
+        req.extensions_mut().insert(User::new(user_id.clone()));
         let res = async move {
             let partition_key = User::get_parition_key_from_user_id(&user_id);
-            let user = dao::get_item_by_primary_key::<User>(
+            let user = dao::get_item_by_primary_key::<User, _, &String>(
                 &cloned_self.app_state.dynamodb,
                 &partition_key,
                 Some(&partition_key),

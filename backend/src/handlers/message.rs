@@ -19,7 +19,7 @@ pub(crate) async fn create_message(
     let member_sort_key = Member::get_sort_key_from_user_id(&user.id);
 
     // TODO: check if room exists?
-    let res = match dao::get_item_by_primary_key::<Member>(
+    let res = match dao::get_item_by_primary_key::<Member, &String, &String>(
         &app_state.dynamodb,
         &member_partition_key,
         Some(&member_sort_key),

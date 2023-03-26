@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,16 +10,22 @@ pub(crate) mod tower_services;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;
 use axum::extract::ws::{Message, WebSocketUpgrade};
+use axum::extract::State;
 use axum::routing::get;
+use axum::Extension;
 use axum::{extract::ws::WebSocket, response::Response, Router};
 use futures::{
     sink::SinkExt,
     stream::{SplitSink, SplitStream, StreamExt},
 };
+use serde_json::{json, Value};
 use tokio::sync::oneshot::{Receiver, Sender};
+use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 // use tokio::sync::watch::Sender;
+use crate::models::User;
 use crate::tower_services::events::EventsAuthLayer;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
 #[tokio::main]
 async fn main() {
@@ -36,11 +43,16 @@ async fn main() {
     };
 
     let app_state = Arc::new(dtos::State { dynamodb: client });
+    // let(tx, rx) =  unbounded_channel();
+    let event_app_state = dtos::EventsAppState {
+        channels: Arc::new(Mutex::new(HashMap::new())),
+    };
 
     let router = Router::new().route("/", get(handle_websocket_connection));
 
     let router = Router::new()
         .nest("/api/events", router)
+        .with_state(event_app_state.clone())
         .layer(ServiceBuilder::new().layer(EventsAuthLayer {
             app_state: Arc::clone(&app_state),
         }));
@@ -51,16 +63,45 @@ async fn main() {
         .unwrap()
 }
 
-async fn handle_websocket_connection(ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(handle_websocket_by_spltting)
+#[axum_macros::debug_handler]
+async fn handle_websocket_connection(
+    ws: WebSocketUpgrade,
+    State(events_app_state): State<dtos::EventsAppState>,
+    Extension(user): Extension<User>,
+) -> Response {
+    ws.on_upgrade(|web_socket| handle_websocket_by_spltting(web_socket, user, events_app_state))
 }
 
-async fn handle_websocket_by_spltting(socket: WebSocket) {
+async fn handle_websocket_by_spltting(
+    socket: WebSocket,
+    user: User,
+    mut events_app_state: dtos::EventsAppState,
+) {
     let (sender, receiver) = socket.split();
+    /*
+     * create a new channel.
+     *
+     *
+     * */
+
+    let (tx, rx) = unbounded_channel::<Value>();
+
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let val = json!({
+                "val": "val"
+            });
+            // TODO: remove unwrap and handle channel close gracefully.
+            tx.send(val).unwrap();
+        }
+    });
+
+    // events_app_state.channels.lock().await.insert(user.id, tx);
 
     let (close_signal_sender, close_signal_receiver) = tokio::sync::oneshot::channel::<()>();
     let task2 = tokio::spawn(handle_read(receiver, close_signal_sender));
-    let task1 = tokio::spawn(handle_send(sender, close_signal_receiver));
+    let task1 = tokio::spawn(handle_send(sender, close_signal_receiver, rx));
 
     tokio::join!(task1, task2);
 
@@ -89,6 +130,7 @@ async fn handle_read(mut receiver: SplitStream<WebSocket>, close_signal_sender: 
 async fn handle_send(
     mut sender: SplitSink<WebSocket, Message>,
     close_signal_receiver: Receiver<()>,
+    mut event_rx: UnboundedReceiver<Value>,
 ) {
     // Wrapping the close_signal_receiver in tokio::spawn
     // mainly because don't want to loose signals inside "looped tokio::select".
@@ -97,29 +139,49 @@ async fn handle_send(
 
     loop {
         tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(2)) => {
-            // we are here that we received a message from message broke/internal messaging system.
+                    // _ = tokio::time::sleep(Duration::from_secs(2)) => {
+                    // // we are here that we received a message from message broker/internal messaging system.
 
 
-            match sender
-                .send(Message::Text("some message -v2".to_string()))
-                .await
-            {
-                Ok(_) => {
-                    println!("message sent, sleeping now");
-                    tokio::time::sleep(Duration::from_secs(2)).await;
+                    // match sender
+                        // .send(Message::Text("some message -v2".to_string()))
+                        // .await
+                    // {
+                        // Ok(_) => {
+                            // println!("message sent, sleeping now");
+                            // tokio::time::sleep(Duration::from_secs(2)).await;
+                        // }
+                        // Err(e) => {
+                            // eprintln!("got some error while sending, erro: {:?}", e);
+                            // break;
+                        // }
+                    // };
+                // },
+                msg = event_rx.recv() => {
+                        println!("messages received from channel");
+                let Some(msg) = msg else {
+                    continue;
+                };
+        match sender
+                        .send(Message::Text(msg.to_string()))
+                        .await
+                    {
+                        Ok(_) => {
+                            println!("message sent after receiving from channel");
+                            // tokio::time::sleep(Duration::from_secs(2)).await;
+                        }
+                        Err(e) => {
+                            eprintln!("got some error while sending, erro: {:?}", e);
+                            break;
+                        }
+                    }
+
+                    },
+                _ = &mut recieve_signal_handle => {
+                    println!("receing close signal inside select");
+                        return;
                 }
-                Err(e) => {
-                    eprintln!("got some error while sending, erro: {:?}", e);
-                    break;
                 }
-            };
-        },
-        _ = &mut recieve_signal_handle => {
-            println!("receing close signal inside select");
-                return;
-        }
-        }
     }
 
     // todo!();
