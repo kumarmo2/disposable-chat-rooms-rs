@@ -4,6 +4,7 @@ use std::time::Duration;
 
 pub(crate) mod dao;
 pub(crate) mod dtos;
+pub(crate) mod handlers;
 pub(crate) mod models;
 pub(crate) mod tower_services;
 
@@ -11,7 +12,8 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;
 use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::extract::State;
-use axum::routing::get;
+use axum::handler::Handler;
+use axum::routing::{get, post};
 use axum::Extension;
 use axum::{extract::ws::WebSocket, response::Response, Router};
 use futures::{
@@ -25,7 +27,7 @@ use tower::ServiceBuilder;
 // use tokio::sync::watch::Sender;
 use crate::models::User;
 use crate::tower_services::events::EventsAuthLayer;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 #[tokio::main]
 async fn main() {
@@ -48,14 +50,22 @@ async fn main() {
         channels: Arc::new(Mutex::new(HashMap::new())),
     };
 
-    let router = Router::new().route("/", get(handle_websocket_connection));
+    let router = Router::new().route(
+        "/",
+        get(
+            handle_websocket_connection.layer(ServiceBuilder::new().layer(EventsAuthLayer {
+                app_state: Arc::clone(&app_state),
+            })),
+        ),
+    );
 
     let router = Router::new()
         .nest("/api/events", router)
-        .with_state(event_app_state.clone())
-        .layer(ServiceBuilder::new().layer(EventsAuthLayer {
-            app_state: Arc::clone(&app_state),
-        }));
+        .route(
+            "/api/events/send",
+            post(crate::handlers::events::send_notification),
+        )
+        .with_state(event_app_state.clone());
 
     axum::Server::bind(&"127.0.0.1:3002".parse().unwrap())
         .serve(router.into_make_service())
@@ -86,18 +96,18 @@ async fn handle_websocket_by_spltting(
 
     let (tx, rx) = unbounded_channel::<Value>();
 
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(2)).await;
-            let val = json!({
-                "val": "val"
-            });
-            // TODO: remove unwrap and handle channel close gracefully.
-            tx.send(val).unwrap();
-        }
-    });
+    // tokio::spawn(async move {
+    // loop {
+    // tokio::time::sleep(Duration::from_secs(2)).await;
+    // let val = json!({
+    // "val": "val"
+    // });
+    // // TODO: remove unwrap and handle channel close gracefully.
+    // tx.send(val).unwrap();
+    // }
+    // });
 
-    // events_app_state.channels.lock().await.insert(user.id, tx);
+    events_app_state.channels.lock().await.insert(user.id, tx);
 
     let (close_signal_sender, close_signal_receiver) = tokio::sync::oneshot::channel::<()>();
     let task2 = tokio::spawn(handle_read(receiver, close_signal_sender));

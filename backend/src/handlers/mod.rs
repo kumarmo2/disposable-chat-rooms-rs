@@ -1,5 +1,6 @@
 // use std::future;
 
+pub(crate) mod events;
 pub(crate) mod message;
 use axum::{
     extract::{Path, State},

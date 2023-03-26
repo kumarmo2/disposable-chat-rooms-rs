@@ -1,3 +1,4 @@
+pub(crate) mod events;
 pub(crate) mod message;
 
 use serde_json::Value;
@@ -49,6 +50,7 @@ pub(crate) struct State {
 
 #[derive(Clone)]
 pub(crate) struct EventsAppState {
+    // TODO: Arc<Mutex<T>> will not scale for high loads. looks for another solution.
     pub(crate) channels: Arc<Mutex<HashMap<String, UnboundedSender<Value>>>>,
 }
 
