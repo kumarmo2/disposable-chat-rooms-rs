@@ -1,5 +1,13 @@
+use std::sync::Arc;
 use std::time::Duration;
 
+pub(crate) mod dao;
+pub(crate) mod dtos;
+pub(crate) mod models;
+pub(crate) mod tower_services;
+
+use aws_config::meta::region::RegionProviderChain;
+use aws_sdk_dynamodb::Client;
 use axum::extract::ws::{Message, WebSocketUpgrade};
 use axum::routing::get;
 use axum::{extract::ws::WebSocket, response::Response, Router};
@@ -8,15 +16,34 @@ use futures::{
     stream::{SplitSink, SplitStream, StreamExt},
 };
 use tokio::sync::oneshot::{Receiver, Sender};
+use tower::ServiceBuilder;
 // use tokio::sync::watch::Sender;
+use crate::tower_services::events::EventsAuthLayer;
 
 #[tokio::main]
 async fn main() {
     println!("hello world from events-service");
+    // TODO: refactor this client instantiation logic.
+    let client = {
+        let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
+        let config = aws_config::from_env()
+            .region(region_provider)
+            .endpoint_url("http://localhost:8000")
+            .load()
+            .await;
+
+        Client::new(&config)
+    };
+
+    let app_state = Arc::new(dtos::State { dynamodb: client });
 
     let router = Router::new().route("/", get(handle_websocket_connection));
 
-    let router = Router::new().nest("/api/events", router);
+    let router = Router::new()
+        .nest("/api/events", router)
+        .layer(ServiceBuilder::new().layer(EventsAuthLayer {
+            app_state: Arc::clone(&app_state),
+        }));
 
     axum::Server::bind(&"127.0.0.1:3002".parse().unwrap())
         .serve(router.into_make_service())

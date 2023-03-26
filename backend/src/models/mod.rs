@@ -13,7 +13,7 @@ use crate::dao::{BoxedAttributes, DynamoItem};
 
 // use crate::dao::DynamoItem;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub(crate) struct User {
     pub(crate) id: String,
 }
@@ -44,10 +44,18 @@ impl User {
     }
 
     pub(crate) fn get_partition_key(&self) -> String {
-        format!("user|{}", self.id)
+        Self::get_parition_key_from_user_id(&self.id)
     }
+
     pub(crate) fn get_sort_key(&self) -> String {
-        format!("user|{}", self.id)
+        Self::get_sort_key_from_user_id(&self.id)
+    }
+    pub(crate) fn get_sort_key_from_user_id(id: &str) -> String {
+        format!("user|{}", id)
+    }
+
+    pub(crate) fn get_parition_key_from_user_id(id: &str) -> String {
+        format!("user|{}", id)
     }
 }
 

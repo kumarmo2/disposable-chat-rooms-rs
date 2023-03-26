@@ -27,6 +27,7 @@ use crate::tower_services::UserLayer;
 
 #[tokio::main]
 async fn main() {
+    // TODO: refactor this client instantiation logic.
     let client = {
         let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
         let config = aws_config::from_env()

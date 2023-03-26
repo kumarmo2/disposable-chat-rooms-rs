@@ -1,5 +1,6 @@
 #![warn(dead_code)]
 
+pub(crate) mod events;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::Poll;
@@ -58,7 +59,6 @@ impl<T> Service<Request<Body>> for UserService<T>
 where
     T: Service<Request<Body>> + Send + Clone,
     <T as Service<Request<Body>>>::Future: Send + 'static,
-    <T as Service<Request<Body>>>::Response: IntoResponse,
 {
     type Response = (Option<CookieJar>, T::Response);
     type Error = Error<T::Error>;
