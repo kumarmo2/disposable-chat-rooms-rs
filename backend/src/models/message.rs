@@ -7,7 +7,7 @@ use crate::dao::DynamoItem;
 
 use super::Room;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Messsage {
     pub(crate) id: String,
     pub(crate) room_id: String,

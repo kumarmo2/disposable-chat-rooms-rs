@@ -3,9 +3,10 @@ use hyper::StatusCode;
 
 use crate::{
     dao,
-    dtos::{message::CreateMessageRequest, ApiResult, AppState},
+    dtos::{events::MessageEvent, message::CreateMessageRequest, ApiResult, AppState},
     models::{member::Member, message::Messsage, Room, User},
 };
+use lapin::{options::BasicPublishOptions, BasicProperties};
 
 pub(crate) async fn create_message(
     Extension(user): Extension<User>,
@@ -54,7 +55,38 @@ pub(crate) async fn create_message(
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ApiResult::Error("Something went wrong, Please try again!")),
         ));
-    }
+    };
+    // TODO: instead of creating a channel everytime, we Pool channels.
+    let connection_result = app_state.rabbitmq_connection.create_channel().await;
+    let channel = match connection_result {
+        Err(e) => {
+            println!("error while getting channel, err: {:?}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResult::Error("Internal server error!")),
+            ));
+        }
+        Ok(channel) => channel,
+    };
+    let message_event = MessageEvent {
+        room_id: &message.room_id,
+        message_id: &message.id,
+    };
+    let payload = serde_json::to_vec(&message_event).unwrap();
+    let Ok(_) = channel
+        .basic_publish(
+            "",
+            "message-queue",
+            BasicPublishOptions::default(),
+            &payload,
+            BasicProperties::default(),
+        )
+        .await else {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResult::Error("Internal server error!")),
+            ));
+    };
     // TODO: publish the message event.
 
     Ok(Json(ApiResult::Result(message.id)))

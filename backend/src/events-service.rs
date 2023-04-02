@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 pub(crate) mod dao;
 pub(crate) mod dtos;
@@ -8,6 +7,8 @@ pub(crate) mod handlers;
 pub(crate) mod models;
 pub(crate) mod tower_services;
 
+use crate::models::User;
+use crate::tower_services::events::EventsAuthLayer;
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;
 use axum::extract::ws::{Message, WebSocketUpgrade};
@@ -20,14 +21,11 @@ use futures::{
     sink::SinkExt,
     stream::{SplitSink, SplitStream, StreamExt},
 };
-use serde_json::{json, Value};
+use serde_json::Value;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
-// use tokio::sync::watch::Sender;
-use crate::models::User;
-use crate::tower_services::events::EventsAuthLayer;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
 #[tokio::main]
 async fn main() {
@@ -45,7 +43,6 @@ async fn main() {
     };
 
     let app_state = Arc::new(dtos::State { dynamodb: client });
-    // let(tx, rx) =  unbounded_channel();
     let event_app_state = dtos::EventsAppState {
         channels: Arc::new(Mutex::new(HashMap::new())),
     };
@@ -95,17 +92,6 @@ async fn handle_websocket_by_spltting(
      * */
 
     let (tx, rx) = unbounded_channel::<Value>();
-
-    // tokio::spawn(async move {
-    // loop {
-    // tokio::time::sleep(Duration::from_secs(2)).await;
-    // let val = json!({
-    // "val": "val"
-    // });
-    // // TODO: remove unwrap and handle channel close gracefully.
-    // tx.send(val).unwrap();
-    // }
-    // });
 
     events_app_state.channels.lock().await.insert(user.id, tx);
 

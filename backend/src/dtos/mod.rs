@@ -46,6 +46,7 @@ pub(crate) enum DaoError {
 #[derive(Clone)]
 pub(crate) struct State {
     pub(crate) dynamodb: Client,
+    pub(crate) rabbitmq_connection: Arc<lapin::Connection>,
 }
 
 #[derive(Clone)]

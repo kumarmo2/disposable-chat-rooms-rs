@@ -4,6 +4,7 @@ mod dtos;
 mod handlers;
 mod models;
 mod tower_services;
+mod utils;
 
 use axum::error_handling::HandleErrorLayer;
 use axum::response::{IntoResponse, Response};
@@ -21,7 +22,10 @@ use axum_extra::extract::CookieJar;
 use handlers::{create_room, get_members_in_room, get_messages, join_room};
 use models::User;
 use serde_json::{json, Value};
+// use tokio::task::spawn;
+use tokio::sync::RwLock;
 use tower::ServiceBuilder;
+use utils::rabbitmq;
 
 use crate::tower_services::UserLayer;
 
@@ -39,7 +43,17 @@ async fn main() {
         Client::new(&config)
     };
 
-    let app_state = Arc::new(State { dynamodb: client });
+    let connection = rabbitmq::create_connection().await.unwrap_or_else(|e| {
+        // println!("error while creating connection to rabbitmq. err: {:?}", e);
+        panic!("error while creating connection to rabbitmq. err: {:?}", e);
+    });
+
+    let connection = Arc::new(connection);
+
+    let app_state = Arc::new(State {
+        dynamodb: client,
+        rabbitmq_connection: connection,
+    });
 
     let room_routes = Router::new()
         .route("/", post(create_room))

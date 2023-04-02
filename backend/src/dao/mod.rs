@@ -24,7 +24,6 @@ pub(crate) trait DynamoItem {
     fn sk(&self) -> Option<String>;
 }
 
-// TODO: instead of taking &str, check if Deref<Target = &str> or AsRef<str> could be used.
 pub(crate) async fn get_item_by_primary_key<'a, T, S1, S2>(
     client: &Client,
     partition_key: S1,
@@ -92,7 +91,7 @@ where
         put_item_request = put_item_request.item("sk", AttributeValue::S(sk));
     }
 
-    println!("putting item, {:?}", put_item_request);
+    // println!("putting item, {:?}", put_item_request);
     let x = put_item_request.send().await;
     x.and_then(|_| Ok(())).or_else(|x| {
         println!("error, x: {:?}", x);

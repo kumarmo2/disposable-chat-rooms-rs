@@ -1,7 +1,6 @@
 use super::User;
 use async_trait::async_trait;
 use axum::extract::FromRequestParts;
-use axum_extra::extract::CookieJar;
 
 pub(crate) struct UserExtractor(pub(crate) User);
 
