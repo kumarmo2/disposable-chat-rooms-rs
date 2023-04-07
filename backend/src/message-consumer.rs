@@ -2,14 +2,18 @@ mod dao;
 mod dtos;
 mod models;
 mod utils;
+use std::net::IpAddr;
+
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::Client;
 use futures::stream::StreamExt;
 use lapin::{self, message::Delivery, options::*, types::FieldTable, Channel};
+use pnet::datalink;
 
 #[tokio::main]
-async fn main() -> lapin::Result<()> {
+async fn main() -> anyhow::Result<()> {
     println!("hello from message consumer");
+
     let connection = crate::utils::rabbitmq::create_connection().await?;
     let channel: Channel = connection.create_channel().await?;
 
@@ -23,6 +27,7 @@ async fn main() -> lapin::Result<()> {
 
         Client::new(&config)
     };
+
     let mut consumer = channel
         .basic_consume(
             "message-queue",
@@ -57,27 +62,43 @@ async fn acknowledge_deliver(delivery: Delivery) {
         });
 }
 
-async fn handle_delivery(delivery: Delivery, dynamodb: Client) {
+async fn handle_delivery(delivery: Delivery, dynamodb: Client) -> anyhow::Result<()> {
     let data = &delivery.data;
-    let message = serde_json::from_slice::<dtos::events::MessageEvent>(&data).unwrap();
-    println!("data: {:?}", message);
-    // let members = match dao::room::get_rooom_members(&dynamodb, message.room_id).await {
-    // Err(e) => {
-    // println!("error while fetching members, err: {:?}", e);
-    // return;
-    // }
-    // Ok(members) => members,
-    // };
+    let message_event = serde_json::from_slice::<dtos::events::MessageEvent>(&data).unwrap();
+    println!("data: {:?}", message_event);
+    let message_fut = dao::get_item_by_primary_key::<models::message::Messsage, &str, &str>(
+        &dynamodb,
+        &message_event.room_id,
+        Some(&message_event.message_id),
+    );
 
-    // if members.len() == 0 {
-    // acknowledge_deliver(delivery).await;
-    // return;
-    // }
-    // members.iter().filter(|member| member.user_id != message.)
-    // if let Err(e) = dao::room::get_rooom_members(&dynamodb, message.room_id).await {};
+    let members_fut = dao::room::get_rooom_members(&dynamodb, &message_event.room_id);
+    let (message_result, members_result) = tokio::join!(message_fut, members_fut);
+    let (message, members) = match (message_result, members_result) {
+        (Err(e), _) => {
+            println!("error fetching message, err: {:?}", e);
+            return Ok(());
+        }
+        (_, Err(e)) => {
+            println!("error retrieving members, err: {:?}", e);
+            return Ok(());
+        }
+        (Ok(None), _) => {
+            println!("found no message for the event, {:?}", message_event);
+            acknowledge_deliver(delivery).await;
+            return Ok(());
+        }
+        (Ok(Some(message)), Ok(members)) => (message, members),
+    };
+    let filtered_members = members
+        .iter()
+        .filter(|members| members.user_id != message.sent_by_user_id);
+    /*
+     * TODO
+     * Get  the ip addresses of the events server, to which these members are connected.
+     * Call the endpoints for each member to deliver these messages to them.
+     * */
 
-    // TODO: from the message, get the members of the room, and send the
-    // "message" type notification to the members except for the sender of the
-    // message.
     acknowledge_deliver(delivery).await;
+    return Ok(());
 }

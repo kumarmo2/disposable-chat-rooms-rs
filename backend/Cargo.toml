@@ -40,3 +40,7 @@ async-trait = "0.1.65"
 futures = "0.3.27"
 futures-util = "0.3.27"
 lapin = {version = "2.1.1", features = ["codegen", "rustls", "rustls-native-certs", "serde_json"]}
+anyhow = {version = "1.0.70", features = ["std", "backtrace"]}
+if-addrs = "0.10.1"
+pnet = "0.33.0"
+chrono = {version = "0.4.24", features = ["clock", "time", "std", "serde"]}

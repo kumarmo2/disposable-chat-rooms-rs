@@ -3,6 +3,7 @@
 pub(crate) mod extractors;
 pub(crate) mod member;
 pub(crate) mod message;
+pub(crate) mod ping;
 
 use std::{fmt::format, str::FromStr, time::Instant};
 

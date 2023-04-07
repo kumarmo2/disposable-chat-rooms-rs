@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 pub(crate) mod dao;
 pub(crate) mod dtos;
@@ -17,19 +18,33 @@ use axum::handler::Handler;
 use axum::routing::{get, post};
 use axum::Extension;
 use axum::{extract::ws::WebSocket, response::Response, Router};
+use chrono::Utc;
 use futures::{
     sink::SinkExt,
     stream::{SplitSink, SplitStream, StreamExt},
 };
+use pnet::datalink;
 use serde_json::Value;
+use tokio::sync::broadcast::{Receiver, Sender};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 
 #[tokio::main]
 async fn main() {
     println!("hello world from events-service");
+    let server_ip = datalink::interfaces()
+        .into_iter()
+        .filter(|iface| iface.name.contains("wl"))
+        .next()
+        .unwrap()
+        .ips
+        .into_iter()
+        .filter(|ip| ip.is_ipv4())
+        .next()
+        .unwrap()
+        .broadcast();
+    println!("srver: {:?}", server_ip);
     // TODO: refactor this client instantiation logic.
     let client = {
         let region_provider = RegionProviderChain::default_provider().or_else("us-west-2");
@@ -42,16 +57,17 @@ async fn main() {
         Client::new(&config)
     };
 
-    let app_state = Arc::new(dtos::State { dynamodb: client });
     let event_app_state = dtos::EventsAppState {
         channels: Arc::new(Mutex::new(HashMap::new())),
+        dynamodb: client,
+        server_ip,
     };
 
     let router = Router::new().route(
         "/",
         get(
             handle_websocket_connection.layer(ServiceBuilder::new().layer(EventsAuthLayer {
-                app_state: Arc::clone(&app_state),
+                app_state: event_app_state.clone(),
             })),
         ),
     );
@@ -82,24 +98,54 @@ async fn handle_websocket_connection(
 async fn handle_websocket_by_spltting(
     socket: WebSocket,
     user: User,
-    mut events_app_state: dtos::EventsAppState,
+    events_app_state: dtos::EventsAppState,
 ) {
     let (sender, receiver) = socket.split();
-    /*
-     * create a new channel.
-     *
-     *
-     * */
+    // let x: u64 = 2334;
+    // Instant::now().elapsed()
 
     let (tx, rx) = unbounded_channel::<Value>();
 
-    events_app_state.channels.lock().await.insert(user.id, tx);
+    events_app_state
+        .channels
+        .lock()
+        .await
+        .insert(user.id.to_string(), tx);
+    // events_app_state.server_ip.to_string
+    /*
+     * add user->server mapping in dynamo.
+     * */
 
-    let (close_signal_sender, close_signal_receiver) = tokio::sync::oneshot::channel::<()>();
+    let (close_signal_sender, close_signal_receiver) = tokio::sync::broadcast::channel::<()>(1);
+    let mut close_signal_receiver2 = close_signal_sender.subscribe();
+    // close_signal_receiver.clone();
     let task2 = tokio::spawn(handle_read(receiver, close_signal_sender));
     let task1 = tokio::spawn(handle_send(sender, close_signal_receiver, rx));
+    let server_ip = events_app_state.server_ip;
+    let state = events_app_state.clone();
 
-    tokio::join!(task1, task2);
+    let task3 = tokio::spawn(async move {
+        loop {
+            // let sleep_task = tokio::time::sleep(Duration::from_secs(5));
+            // let close_signal_task = close_signal_receiver2.recv();
+
+            tokio::select! {
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {
+
+                    let ping = models::ping::Ping { user_id:user.id.to_string(), valid_till: Utc::now(), server_ip: server_ip  };
+                    dao::put_item(&state.dynamodb, &ping).await;
+                    println!("pinged for user");
+                },
+                _ = close_signal_receiver2.recv() => {
+                    break;
+                }
+
+
+            }
+        }
+    });
+
+    let (_, _, _) = tokio::join!(task1, task2, task3);
 
     // futures::join!(task1, task2);
 }
@@ -125,34 +171,16 @@ async fn handle_read(mut receiver: SplitStream<WebSocket>, close_signal_sender: 
 
 async fn handle_send(
     mut sender: SplitSink<WebSocket, Message>,
-    close_signal_receiver: Receiver<()>,
+    mut close_signal_receiver: Receiver<()>,
     mut event_rx: UnboundedReceiver<Value>,
 ) {
     // Wrapping the close_signal_receiver in tokio::spawn
     // mainly because don't want to loose signals inside "looped tokio::select".
     // Read more here. https://docs.rs/tokio/latest/tokio/task/struct.JoinHandle.html#cancel-safety
-    let mut recieve_signal_handle = tokio::spawn(async move { close_signal_receiver.await });
+    let mut recieve_signal_handle = tokio::spawn(async move { close_signal_receiver.recv().await });
 
     loop {
         tokio::select! {
-                    // _ = tokio::time::sleep(Duration::from_secs(2)) => {
-                    // // we are here that we received a message from message broker/internal messaging system.
-
-
-                    // match sender
-                        // .send(Message::Text("some message -v2".to_string()))
-                        // .await
-                    // {
-                        // Ok(_) => {
-                            // println!("message sent, sleeping now");
-                            // tokio::time::sleep(Duration::from_secs(2)).await;
-                        // }
-                        // Err(e) => {
-                            // eprintln!("got some error while sending, erro: {:?}", e);
-                            // break;
-                        // }
-                    // };
-                // },
                 msg = event_rx.recv() => {
                         println!("messages received from channel");
                 let Some(msg) = msg else {

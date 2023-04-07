@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ops::Deref, str::FromStr};
 pub(crate) mod message;
+pub(crate) mod ping;
 pub(crate) mod room;
 
 use aws_sdk_dynamodb::{

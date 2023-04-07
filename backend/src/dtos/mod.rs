@@ -3,6 +3,7 @@ pub(crate) mod message;
 
 use serde_json::Value;
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::sync::Arc;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::Mutex;
@@ -53,6 +54,9 @@ pub(crate) struct State {
 pub(crate) struct EventsAppState {
     // TODO: Arc<Mutex<T>> will not scale for high loads. looks for another solution.
     pub(crate) channels: Arc<Mutex<HashMap<String, UnboundedSender<Value>>>>,
+
+    pub(crate) dynamodb: Client,
+    pub(crate) server_ip: IpAddr,
 }
 
 pub(crate) type AppState = Arc<State>;

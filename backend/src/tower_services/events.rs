@@ -8,7 +8,7 @@ use hyper::{Body, StatusCode};
 use tower::{Layer, Service};
 
 use crate::dao;
-use crate::dtos::AppState;
+use crate::dtos::{AppState, EventsAppState};
 use crate::models::User;
 
 #[derive(Clone)]
@@ -17,12 +17,12 @@ where
     T: Clone,
 {
     inner_service: T,
-    app_state: AppState,
+    app_state: EventsAppState,
 }
 
 #[derive(Clone)]
 pub(crate) struct EventsAuthLayer {
-    pub(crate) app_state: AppState,
+    pub(crate) app_state: EventsAppState,
 }
 
 impl<S> Layer<S> for EventsAuthLayer
@@ -34,7 +34,7 @@ where
     fn layer(&self, inner: S) -> Self::Service {
         EventsAuthService {
             inner_service: inner,
-            app_state: Arc::clone(&self.app_state),
+            app_state: self.app_state.clone(),
         }
     }
 }
